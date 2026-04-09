@@ -75,11 +75,7 @@ let deferredInstallPrompt = null;
 
 /**
  * Безопасно читает массив задач из localStorage.
- *
- * Почему здесь try/catch:
- * - строка в localStorage может оказаться повреждённой;
- * - JSON.parse выбросит ошибку при некорректном содержимом;
- * - интерфейс не должен полностью падать из-за одной ошибки хранения.
+ * Если данных нет или они повреждены, возвращает пустой массив.
  */
 function loadTasks() {
   try {
@@ -166,17 +162,21 @@ function createTaskElement(task) {
   const actions = document.createElement('div');
   actions.className = 'task-item__actions';
 
-  /**
-   * TODO для студентов:
-   * Добавить рядом кнопку редактирования и реализовать изменение текста задачи.
-   */
+  // Кнопка редактирования
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'button button--primary button--small';
+  editBtn.textContent = 'Просто редактируй это!';
+  editBtn.dataset.action = 'edit';
 
+  // Кнопка удаления
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
   deleteBtn.className = 'button button--danger button--small';
   deleteBtn.textContent = 'Просто удали это!';
   deleteBtn.dataset.action = 'delete';
 
+  actions.appendChild(editBtn);
   actions.appendChild(deleteBtn);
 
   li.appendChild(leftPart);
@@ -276,6 +276,77 @@ function toggleTask(taskId) {
 function deleteTask(taskId) {
   const updated = loadTasks().filter((task) => task.id !== taskId);
   saveTasks(updated);
+  renderTasks();
+}
+
+/**
+ * Редактирует текст задачи.
+ * На вход функции передается id задачи и её DOM-элемент.
+ * Внутри функции мы заменяем текст на инпут и меняем кнопки на "Сохранить" и "Отмена".
+ */
+
+function editTask(taskId, taskItem) {
+  const task = loadTasks().find((task) => task.id === taskId);
+  if (!task) return;
+
+  const leftPart = taskItem.querySelector('.task-item__left');
+  const textSpan = taskItem.querySelector('.task-item__text');
+  const actionsDiv = taskItem.querySelector('.task-item__actions');
+
+  const editInput = document.createElement('input');
+  editInput.className = 'input edit-task-input';
+  editInput.type = 'text';
+  editInput.value = task.text;
+
+  leftPart.replaceChild(editInput, textSpan);
+
+  actionsDiv.innerHTML = '';
+
+  // Создаем кнопку сохранения
+  const editConfirmBtn = document.createElement('button');
+  editConfirmBtn.className = 'button button--primary button--small';
+  editConfirmBtn.textContent = 'Просто сохрани это!';
+  editConfirmBtn.dataset.action = 'editConfirm';
+
+  // Создаем кнопку отмены
+  const editCancelBtn = document.createElement('button');
+  editCancelBtn.className = 'button button--secondary button--small';
+  editCancelBtn.textContent = 'Просто отмени это!';
+  editCancelBtn.dataset.action = 'editCancel';
+
+  actionsDiv.appendChild(editConfirmBtn);
+  actionsDiv.appendChild(editCancelBtn);
+
+  editInput.focus();
+}
+
+function editConfirm(taskId, taskItem) {
+  const editInput = taskItem.querySelector('.edit-task-input');
+  if (!editInput) return;
+
+  const newText = editInput.value.trim();
+
+  if (!newText) {
+    alert('Текст задачи не может быть пустым!');
+    return;
+  }
+
+  // Обновляем массив задач
+  const updated = loadTasks().map((task) => {
+    if (task.id === taskId) {
+      return {
+        ...task,
+        text: newText
+      };
+    }
+    return task;
+  });
+
+  saveTasks(updated);
+  renderTasks();
+}
+
+function editCancel() {
   renderTasks();
 }
 
@@ -387,6 +458,7 @@ function registerServiceWorker() {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
       console.log('Service Worker зарегистрирован:', registration.scope);
+      alert('Офлайн режим готов!');
 
       /**
        * TODO для студентов:
@@ -431,6 +503,12 @@ taskList.addEventListener('click', (event) => {
 
   if (action === 'delete') {
     deleteTask(taskId);
+  } else if (action === 'edit') {
+    editTask(taskId, taskItem);
+  } else if (action === 'editConfirm') {
+    editConfirm(taskId, taskItem); 
+  } else if (action === 'editCancel') {
+    editCancel();
   }
 });
 

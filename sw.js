@@ -10,7 +10,7 @@
  * Более продвинутые стратегии специально оставлены студентам как TODO.
  */
 
-const CACHE_NAME = 'practice-13-14-cache-v3';
+const CACHE_NAME = 'practice-13-14-cache-v4';
 
 /**
  * Набор ресурсов, которые кладём в кэш сразу при установке Service Worker.
@@ -83,27 +83,17 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
 
-      return fetch(event.request)
-        .then((networkResponse) => {
-          /**
-           * TODO для студентов:
-           * 1. Добавить отдельный runtime-cache для части GET-ресурсов.
-           * 2. Сделать разные стратегии для HTML, картинок и других ресурсов.
-           * 3. Реализовать Network First или Stale While Revalidate для части запросов.
-           */
+        return caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, networkResponse.clone());
           return networkResponse;
-        })
-        .catch(() => {
-          return new Response('Офлайн: ресурс недоступен и не найден в кэше.', {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8'
-            }
-          });
         });
+      }).catch(() => {
+        // Оффлайн-режим
+      });
+
+      return cachedResponse || fetchPromise;
     })
   );
 });
