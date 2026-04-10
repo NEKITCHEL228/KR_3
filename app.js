@@ -11,9 +11,7 @@
  * 7. Случайные мотивационные цитаты в футере.
  *
  * Что оставлено студентам:
- * - редактирование задачи;
  * - фильтрация списка;
- * - подтверждение удаления;
  * - улучшение кэширования в Service Worker;
  * - более продуманная обработка обновлений PWA.
  */
@@ -32,6 +30,8 @@ const installBtn = document.getElementById('installBtn');
 const installHint = document.getElementById('installHint');
 const quoteText = document.getElementById('quoteText');
 const newQuoteBtn = document.getElementById('newQuoteBtn');
+const toast = document.getElementById('toast');
+const filterButtons = document.querySelectorAll('.button--filter');
 
 // =========================================================
 // Константы приложения
@@ -69,6 +69,11 @@ const planningQuotes = [
  */
 let deferredInstallPrompt = null;
 
+/**
+ * Текущий выбранный фильтр: 'all' | 'active' | 'completed'
+ */
+let currentFilter = 'all';
+
 // =========================================================
 // Работа с localStorage
 // =========================================================
@@ -100,6 +105,22 @@ function saveTasks(tasks) {
 // =========================================================
 // Вспомогательные функции
 // =========================================================
+
+/**
+ * Показывает ненавязчивое toast-уведомление внизу экрана.
+ * Автоматически скрывается через 3 секунды.
+ *
+ * @param {string} message - текст уведомления.
+ */
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add('toast--visible');
+
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(() => {
+    toast.classList.remove('toast--visible');
+  }, 3000);
+}
 
 /**
  * Генерирует простой уникальный идентификатор задачи.
@@ -197,23 +218,32 @@ function updateStats(tasks) {
 }
 
 /**
- * Полная перерисовка списка задач.
- * Для учебного проекта это допустимый и понятный подход.
+ * Полная перерисовка списка задач с учётом текущего фильтра.
  */
 function renderTasks() {
   const tasks = loadTasks();
+
+  const filteredTasks = tasks.filter((task) => {
+    if (currentFilter === 'active') return !task.completed;
+    if (currentFilter === 'completed') return task.completed;
+    return true;
+  });
+
   taskList.innerHTML = '';
 
-  if (tasks.length === 0) {
+  if (filteredTasks.length === 0) {
     const emptyState = document.createElement('li');
     emptyState.className = 'empty-state';
-    emptyState.textContent = 'Пока задач нет. Добавьте первую запись.';
+    emptyState.textContent =
+      currentFilter === 'active' ? 'Нет активных задач.' :
+      currentFilter === 'completed' ? 'Нет выполненных задач.' :
+      'Пока задач нет. Добавьте первую запись.';
     taskList.appendChild(emptyState);
     updateStats(tasks);
     return;
   }
 
-  tasks.forEach((task) => {
+  filteredTasks.forEach((task) => {
     taskList.appendChild(createTaskElement(task));
   });
 
@@ -274,10 +304,25 @@ function toggleTask(taskId) {
  * Подтверждение специально не добавлено: это TODO для студентов.
  */
 function deleteTask(taskId) {
+  const conf = confirm("Удалить эту задачу?");
+  if (!conf) {
+    return;
+  }
+
   const updated = loadTasks().filter((task) => task.id !== taskId);
+
   saveTasks(updated);
   renderTasks();
 }
+
+// function deleteTasks(tasks) {
+//   tasks.forEach(task => {
+//     const updated = loadTasks().filter((t) => t !== task);
+
+//     saveTasks(updated);
+//     renderTasks();
+//   });
+// }
 
 /**
  * Редактирует текст задачи.
@@ -351,12 +396,23 @@ function editCancel() {
 }
 
 /**
- * Удаляет все выполненные задачи.
+ * Удаляет все выполненные задачи с подтверждением.
  */
 function clearCompletedTasks() {
+  const completedCount = loadTasks().filter((task) => task.completed).length;
+
+  if (completedCount === 0) {
+    showToast('Нет выполненных задач для удаления.');
+    return;
+  }
+
+  const confirmed = confirm(`Удалить ${completedCount} выполненных задач?`);
+  if (!confirmed) return;
+
   const updated = loadTasks().filter((task) => !task.completed);
   saveTasks(updated);
   renderTasks();
+  showToast(`Удалено выполненных задач: ${completedCount}.`);
 }
 
 // =========================================================
@@ -458,7 +514,7 @@ function registerServiceWorker() {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
       console.log('Service Worker зарегистрирован:', registration.scope);
-      alert('Офлайн режим готов!');
+      showToast('✓ Офлайн-режим готов.');
 
       /**
        * TODO для студентов:
@@ -471,7 +527,7 @@ function registerServiceWorker() {
     }
   });
 }
-
+//
 // =========================================================
 // Обработчики событий
 // =========================================================
@@ -506,7 +562,7 @@ taskList.addEventListener('click', (event) => {
   } else if (action === 'edit') {
     editTask(taskId, taskItem);
   } else if (action === 'editConfirm') {
-    editConfirm(taskId, taskItem); 
+    editConfirm(taskId, taskItem);
   } else if (action === 'editCancel') {
     editCancel();
   }
@@ -534,6 +590,20 @@ clearCompletedBtn.addEventListener('click', clearCompletedTasks);
 newQuoteBtn.addEventListener('click', showRandomQuote);
 window.addEventListener('online', updateNetworkStatus);
 window.addEventListener('offline', updateNetworkStatus);
+
+/**
+ * Обработка кликов по кнопкам фильтрации.
+ */
+filterButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    currentFilter = btn.dataset.filter;
+
+    filterButtons.forEach((b) => b.classList.remove('button--filter--active'));
+    btn.classList.add('button--filter--active');
+
+    renderTasks();
+  });
+});
 
 // =========================================================
 // Инициализация
